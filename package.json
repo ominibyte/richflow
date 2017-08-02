@@ -1,7 +1,7 @@
 {
   "name": "richflow",
-  "description": "A framework for distributed javascript data pipeline processing and data sharing.",
-  "version": "0.0.1",
+  "description": "A framework for javascript data pipeline processing and data sharing.",
+  "version": "0.0.2",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -30,8 +30,11 @@
     "flow",
     "pipeline computing",
     "data processing",
-    "parallel data processing",
     "javascript map reduce data processing framework"
   ],
-  "author": "Richboy David"
+  "author": "Richboy David",
+  "bugs": {
+    "url": "https://github.com/ominibyte/richflow/issues"
+  },
+  "homepage": "https://github.com/ominibyte/richflow#readme"
 }

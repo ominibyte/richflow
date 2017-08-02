@@ -139,6 +139,37 @@
         }
 
 
+        //Dummy function to be used by collect
+        static toArray(){
+            return "toArray";
+        }
+
+        //Dummy function to be used by collect
+        static toSet(){
+            return "toSet"
+        }
+
+        //Dummy function to be used by OrderBy
+        static ASC(){
+            return "ASC";
+        }
+
+        //Dummy function to be used by OrderBy
+        static DESC(){
+            return "DESC";
+        }
+
+        //Dummy function to be used by OrderBy
+        static NUM_ASC(){
+            return "NUM_ASC";
+        }
+
+        //Dummy function to be used by OrderBy
+        static NUM_DESC(){
+            return "NUM_DESC";
+        }
+
+
         //*******************
         //   FLOW METHODS
         //*******************
@@ -176,7 +207,7 @@
         /**
          * This create a data window to operate on
          * @param startIndex the starting point/index in the data stream...closely related to the amount of elements to skip
-         * @param endIndex the ending point/index in the data stream.
+         * @param endIndex the ending point/index in the data stream (exclusive).
          */
         range(startIndex, endIndex){
             if( startIndex < 0 )
@@ -263,7 +294,39 @@
             return this.where(func);
         }
 
+        static _sort(order){
+            return function(a, b){
+                if( order == "num_asc" )
+                    return a - b;
+                else if( order == "num_desc" )
+                    return b - a;
+                else {
+                    if( a < b )
+                        return order == "asc" ? -1 : 1;
+                    if( a > b )
+                        return order == "asc" ? 1 : -1;
+                    return 0;
+                }
+            };
+        }
+
         orderBy(func){
+            if( !func )
+                func = Flow._sort("asc");
+
+            if( Util.isFunction(func) ) {
+                if( func == Flow.ASC )
+                    func = Flow._sort("asc");
+                else if( func == Flow.DESC )
+                    func = Flow._sort("desc");
+                else if( func == Flow.NUM_ASC )
+                    func = Flow._sort("num_asc");
+                else if( func == Flow.NUM_DESC )
+                    func = Flow._sort("num_desc");
+            }
+            else if( Util.isString(func) )
+                func = Flow._sort(func.toLowerCase());
+
             var flow = new OrderByMethodFlow(func);
 
             setRefs(this, flow);
@@ -312,16 +375,6 @@
             this.next = _next;
 
             return total;
-        }
-
-        //Dummy function to be used by collect
-        static toArray(){
-            return "toArray";
-        }
-
-        //Dummy function to be used by collect
-        static toSet(){
-            return "toSet"
         }
 
         //Function to be used by collect
@@ -700,10 +753,6 @@
          * The process method will act like the pipe method in the default Flow class (but without an input)
          */
         process(){
-            //establish link from parent to this Flow
-            if( this.prev.next != this )//if the parent was linked to another Flow, bring back the link
-                this.prev.next = this;
-
             if (this.pos >= this.iterators.length) {
                 this.pos = 0;
                 return null;
