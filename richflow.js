@@ -1640,7 +1640,7 @@
         constructor(streamer){
             super();
 
-            streamer.register(this);
+            streamer.subscribe(this);
         }
 
         /**
@@ -1666,8 +1666,9 @@
          *
          * @param source This is the Flow that this OutFlow is based on. The Flow can wrap a FileSystem
          * @param streamer This is the Streamer object which will receive the stream contents from the OutFlow
+         * @param key An optional identifier for this OutFlow. If not provided one is generated.
          */
-        constructor(source, streamer){
+        constructor(source, streamer, key){
             super();
 
             if( !(source instanceof Flow) )//check if source is a Flow
@@ -1676,7 +1677,8 @@
             if( !Util.isStreamer(streamer) )//check if streamer is a Flow
                 throw new Error("`streamer` is not a Streamer");
 
-            this.streamer = streamer;
+            this.streamer = streamer ? streamer : new Streamer();
+            this.key = key ? key : Util.generateUUID();    //For identification. Could be used in the Streamer
 
             this.source = source;
             setRefs(source, this);  //Create a link from the source flow to this flow so that we receive push data
@@ -1692,7 +1694,7 @@
         }
 
         push(input){
-            this.streamer.push(input);
+            this.streamer.push(input, this.key);
         }
     }
 
@@ -1715,17 +1717,18 @@
 
         /**
          * This method would be called by the OutFlow each time data is available at the Flow chain end.
-         * If a receiver is specified in the constructor, the receiver would be sent the data eat time it arrives
+         * If a receiver is specified in the constructor, the receiver would be sent the data each time it arrives
          * otherwise, you will need to override this class to specify your implementation
-         * @param input the data pushed from the OutFlow
+         * @param input The data pushed from the OutFlow
+         * @param key The key of the OutFlow sending this data
          */
-        push(input){
+        push(input, key){
             if( this.receiver != null )
-                this.receiver(input);
+                this.receiver(input, key);
         }
 
         /**
-         * This will be used to register a listener for data streams
+         * This will be used to subscribe a listener for data streams
          * @param listener the function or object to be notified of new data
          */
         subscribe(listener){
@@ -1747,14 +1750,35 @@
         }
 
         /**
-         * This method will be used by the InFlow/IteratorFlow to unregister from receiving stream data.
+         * This method will be used by the InFlow/IteratorFlow to unsubscribe from receiving stream data.
          * When stopPush is called on element of the Flow chain
          * @param listener
          */
-        unregister(listener){
+        unsubscribe(listener){
             let index = this.listeners.indexOf(listener);
             if( index >= 0 )
                 this.listeners.splice(index, 1);
+        }
+
+        /**
+         * If Streamer needs to be used in pull mode. It could be the case that streamed data is cached and needs to be
+         * processed later as a finite data structure. This methods returns the total number of items available
+         * @returns {number} the size of elements
+         */
+        size(){
+            return 0;
+        }
+
+        /**
+         * Also If Streamer needs to be used in pull mode. It could be the case that streamed data is cached and needs to be
+         * processed later as a finite data structure. This method returns the data element at the given index
+         * @param index the index of the data item to return
+         * @returns {*} the item. null should never be returned cause it has a special meaning within Flow.
+         */
+        get(index){
+            //NOTE: null should never be returned cause it has a special meaning within Flow.
+            //If this method returns null it will be swapped with {} and could affect your Flow usage.
+            return {};
         }
     }
 
@@ -1988,9 +2012,27 @@
          */
         static createIteratorFromStreamer(streamer){
             return (function(){
+                let length = streamer.size();
+                let nul = {};
+                let pos = 0;
+                let item;
+
                 return {
                     next: function(){
-                        return {done: true};
+                        try {
+                            if( pos >= length )
+                                return  {done: true};
+                            item = streamer.get(pos);
+                            return {value: item == null ? nul : item, done: false};
+                        }
+                        finally{
+                            pos++;
+                            if( pos > length ){
+                                pos = 0;    //reset for reuse
+                                //if the underlying data size changed
+                                length = streamer.size();
+                            }
+                        }
                     },
                     streamer: streamer
                 };

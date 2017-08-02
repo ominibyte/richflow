@@ -61,6 +61,7 @@ Understanding RichFlow
 A Flow is a data abstraction encapsulated within a JS ES6 class object that allows several operations on several data structures. Large collections of data can be processed efficiently. Flow allows programmers operate on data in somewhat similar way to SQL operations and it uses relatively similar query words.
 Flow operations can either be methods/transformations (operations that yield other Flows) or actions (operations that yield a result).
 
+
 Flow Creation
 -------------
 A Flow can be created from several Javascript data structures including: Array, Set, Map, Object, FileSystem, Generator, and Streamer (an in-built bare-bones class for supporting data streaming). The last two could potentially produce an infinite stream of data.
@@ -471,7 +472,7 @@ From the example above, there are three Flow objects in the Flow chain. When an 
 ### Flow Push & Pull Models
 Flow provides two modes of data pipelining: push and pull. The pull model is used to request that data be piped from the IteratorFlow (discussed later) through the chain. The data is generated from the Iterator when requested and sent through the chain. This mode is used by Flow actions to do a final computation on the dataset. For the push model, data is automatically piped through the Flow chain. The push model is used in Flow Streaming.
 
-### Flow Streaming
+### Flow Streaming & The Streamer Class
 For continuous streams of data, Flow provides a data push model that can continuously pipe data through the Flow chain. This can be especially useful if computed data needs to be sent to another application for further processing. Each Flow pushes processed data to the next Flow in the chain or to a customizable terminal function (If the Flow is the last in the chain). The terminal function for a Flow can be set using the setTerminalFunction method. Flow streaming can be achieved when the Flow is created from either a Streamer or a function that generates continuous data like a JS Generator. An example of working with Streamer is shown below:
 
 ```javascript
@@ -493,7 +494,11 @@ setInterval(() => {
 }, 500);
 ```
 
-If the `startPush` method is called after the Streamer starts generating data, some data may be lost at the initial stage.
+**NOTE**: If the `startPush` method is called after the Streamer starts generating data, some data may be lost at the initial stage.
+
+The Streamer class is bare-bones and does minimal work. It can be extended to do much more like working as a finite dataset. Data could be received from the OutFlow and cached or data it generates could be cached and reused as a finite dataset using the Flow pull mode. If you wish to use the Streamer in Flow pull mode, you will need to extend the class and provide implementation for the `size` and `get` methods.
+
+The Streamer class can act as a stream provider and a stream receiver as well. A function can be supplied to the constructor of the Streamer to receive stream data. More on this on the InFlow and OutFlow sections.
 
 ### IteratorFlow
 The IteratorFlow is a Flow that creates a unified means of retrieving data from different data structures. The IteratorFlow turns the data passed to Flow.from(…) into a Javascript Iterable by wrapping the data with an iterator implementation that makes retrieving data as easy as calling a next() method on the iterator handle. More Iterators can be added via the merge method on an object of IteratorFlow. The merge method takes the same type of parameter as the Flow.from(…) method.
@@ -509,13 +514,13 @@ For data streaming in Flow, the IteratorFlow needs to listen for changes on the 
 
 
 ### DiscretizerFlow & DiscretizedFlow
-DiscretizerFlow partitions streams of data flowing through the Flow chain into windows and each data window could be emitted as a DiscretizedFlow or an array. Actually, discretisation can also occur for static/finite datasets like arrays or generators. DiscretizedFlows are IteratorFlows and could themselves be discretised and Flow actions can be called on them. Any Flow can be discretised (with an exception to OutFlow). However, the discretization implementation in IteratorFlow differs from the implementation on others Flow.
+DiscretizerFlow partitions streams of data flowing through the Flow chain into windows and each data window could be emitted as a DiscretizedFlow or an array. Actually, discretization can also occur for static/finite datasets like arrays or generators. DiscretizedFlows are IteratorFlows and could themselves be discretized and Flow actions can be called on them. Any Flow can be discretized (with an exception to OutFlow). However, the discretization implementation in IteratorFlow differs from the implementation on others Flow.
 
-IteratorFlow handles the discretisation process internally, while the DiscretizerFlow handles discretisation for all other Flows. For IteratorFlow discretisation, the data window can be created from a single iterator or multiple iterators (this could be a single datastream or multiple datastream) while the discretisation for other Flow groups are done on the input data. The discretize method takes three arguments namely - the window span, the span length and a boolean value indicating if data should be spawned as discretised flows or as arrays. The third argument is optional and defaults to true.
+IteratorFlow handles the discretization process internally, while the DiscretizerFlow handles discretization for all other Flows. For IteratorFlow discretization, the data window can be created from a single iterator or multiple iterators (this could be a single datastream or multiple datastream) while the discretization for other Flow groups are done on the input data. The discretize method takes three arguments namely - the window span, the span length and a boolean value indicating if data should be spawned as discretized flows or as arrays. The third argument is optional and defaults to true.
 
 For IteratorFlow discretization, the window span talks about how many iterators should be included in creating the window. Recall that an Iterator can be added via the IteratorFlow.merge(…) method. A block of data is a data structure that has one item from each iterator from the window. The span length is the number of data blocks that should constitute a discrete block. Span length can be a number, a function or an object having an ‘isDataEnd’ function. The function receives two arguments - the last data added and the current length of the window span and should evaluate to a boolean.
 
-For other Flow groups, discretisation is on the input. It is the responsibility of the programmer to ensure that the data received as input to the DiscretizerFlow is fit for discretisation and it is assumed that each data piped can be broken down is the way needed by the programmer. When DiscretizerFlow determines that it is not possible to discretize ‘perfectly’, the implementation respects the programmers wish and fills the remaining slots  in the data block with null values. The discretize method take in the same arguments and the span length follows the same as that of IteratorFlow. The window span here talks about how many parts each input piped to the DiscretizerFlow can be broken down. It is assumed that when each input is passed to Flow.from(…), it should be able to create an Iterator that will generate the amount of data required by the programmer.
+For other Flow groups, discretization is on the input. It is the responsibility of the programmer to ensure that the data received as input to the DiscretizerFlow is fit for discretization and it is assumed that each data piped can be broken down is the way needed by the programmer. When DiscretizerFlow determines that it is not possible to discretize ‘perfectly’, the implementation respects the programmers wish and fills the remaining slots  in the data block with null values. The discretize method take in the same arguments and the span length follows the same as that of IteratorFlow. The window span here talks about how many parts each input piped to the DiscretizerFlow can be broken down. It is assumed that when each input is passed to Flow.from(…), it should be able to create an Iterator that will generate the amount of data required by the programmer.
 
 ```javascript
 //lazily create 4 streamers
@@ -535,11 +540,82 @@ setInterval(() => {
 }, 500);
 ```
 
-### InFlow
-*example coming soon*
-
 ### OutFlow
-*example coming soon*
+In [JAMScript](https://github.com/anrl/JAMScript-beta), OutFlow was built as a specialized Flow for the purpose of sending processed data to external applications. Here, the OutFlow has been stripped of that functionality. Though the concept is still part of it but that is now the responsibility of Streamer. When an OutFlow is created, a Flow object is supplied as a argument which the OutFlow links to, in order to receive pushed data. A Streamer object is also provided as the second argument in the constructor to which the OutFlow is expected to push the data and an identifier key which can optionally be supplied as a third argument (If none is supplied, one is auto generated). A Streamer could for instance generate stream data from sensors and write to a datastore such as Redis or send the computed data elsewhere. Let us see an example with Redis:
+
+```javascript
+//require OutFlow, Flow and Streamer
+const {Flow, Streamer, OutFlow} = require('richflow');  //in node.js (See top for browser)
+var Redis = require('redis-fast-driver'); //require Redis
+var redis = new Redis({host: '127.0.0.1', port: 6379}); //establish connection
+
+//create 4 streamers. Could listen to sensors and obtain data
+var streamers = Flow.of(4).map(a => new Streamer()).collect();
+
+//we need to merge all the streams so we start by adding one
+var flow = Flow.from(streamers[0]);
+for( i = 1; i < streamers.length; i++ )
+    flow = flow.merge(streamers[i]);  //merge the remainder
+
+var outFlow = new OutFlow(flow.discretize(streamers.length, 1),
+                            new Streamer((dFlow, key) => {
+                              let avg = dFlow.selectFlatten().average();
+                              let timestamp = new Date().getTime();
+                              redis.rawCall(['ZADD', key, timestamp, avg + '']);
+                            }), "App1.Key");
+outFlow.start();  //inform the IteratorFlow to begin pushing data
+
+//simulate sensor data
+setInterval(() => {
+    streamers.forEach(streamer => streamer.send(parseInt(Math.random() * 10)));
+}, 500);
+```
+
+The start() method in OutFlow calls the startPush() method in the IteratorFlow (the first flow in the chain) and informs the IteratorFlow to start listening for push data from the data source. This data is continually pushed and may or may not get to the OutFlow based on the constraints within each Flow object in the Flow chain. As data arrives at the OutFlow, it is sent to the Streamer which further sends it to Redis.
+To stop listening to data streams,  the programmer can call the OutFlow stop method on the object handle which will in turn call the stopPush() method on the IteratorFlow. For example:
+
+```javascript
+outFlow.stop();
+```
+
+### InFlow
+This is also another specialized Flow. In [JAMScript](https://github.com/anrl/JAMScript-beta) it is solely responsible for retrieving data from an external application. The retrieved data can be taken through further processing along a Flow chain before being used. Here, the InFlow can listens for new data from the Streamer and push them onwards to any connected Flow. An example with Redis following from the OutFlow:
+
+```javascript
+//require InFlow, Flow and Streamer
+const {Flow, Streamer, InFlow} = require('richflow');  //in node.js (See top for browser)
+var Redis = require('redis-fast-driver'); //require Redis
+var redis = new Redis({host: '127.0.0.1', port: 6379}); //establish connection
+
+class MyStreamer extends Streamer{
+  constructor(){
+    super();
+    this.lastIndex = 0;
+    //listen for new data on Redis
+    redis.rawCall(['config', 'set', 'notify-keyspace-events', 'Ez']);
+    redis.rawCall(['psubscribe', '__keyevent*'], this.notify);
+  }
+  notify(e, data){
+    if(data[0] == "pmessage" && data[3]){ //check if a message has arrived
+      //get data from Redis
+      var self = this;
+      redis.rawCall(['ZRANGE', "App1.Key", this.lastIndex + 1, -1], function(err, resp){
+          if( err )
+              throw new Error(err);
+
+          for (var i = 0; i < resp.length; i++) {
+              self.lastIndex++;
+              self.send(resp[i]); //send data to all listeners like InFlow
+          }
+      });
+    }
+  }
+}
+
+var inflow = new InFlow(new MyStreamer());
+var flow = inflow.where(avg => avg > 5);  //filter for averages above 5
+flow.setTerminalFunction(console.log);  //print to the console
+```
 
 ### Flow Caching
 
@@ -548,6 +624,8 @@ This is an internal process that aims to speed up Flow reuse and works with stat
 
 Common Pitfalls
 ---------------
+The `null` value has a special meaning within Flow so your data should not contain it. This could cause Flow to give a fake report.
+
 By default, Flow caches outputs for faster reuse. However, this can cause certain issues if the underlying data source changes. With caching, the changes will not be reflected when the constructed Flow is being reused. Let us see a simple example with Arrays:
 
 ```javascript
@@ -597,3 +675,7 @@ Roadmap
 i. ParallelFlow: A truly parallel pipeline data processing library.
 
 ii. Flow Caching Offloading: An investigation needs to be made on when and which Flows to release memory, especially when the system is running low on RAM storage. There could be a listener that listens out for memory changes and probably informs Flows to either save processed data to disk or release the data. Based on the size of data held by the Flows in the middle of the chain, the runtime could decide which will be faster, saving to the disk and reloading from disk when needed or recomputing from the previous Flow in the chain.
+
+Contact
+-------
+For questions or suggestions please send a message to david.echomgbe \[@\] gmail.com. Please prefix your email subject with "RichFlow -".
