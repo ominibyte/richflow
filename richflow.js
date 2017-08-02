@@ -1614,7 +1614,7 @@
          * @param elements an array of elements from the DiscretizerFlow
          */
         constructor(elements){
-            super(FlowFactory.createIteratorFromArray(elements).iterators[0]);
+            super(FlowFactory.createIteratorFromArray(elements));
             this.elements = elements;
         }
 
@@ -1741,7 +1741,7 @@
          * @param data the data to be sent all available listeners
          * @private
          */
-        _send(data){
+        send(data){
             Flow.from(this.listeners).where(listener => listener.notify && Util.isFunction(listener.notify)).foreach(listener => listener.notify(data));
             Flow.from(this.listeners).where(listener => !(listener.notify && Util.isFunction(listener.notify)) && Util.isFunction(listener)).foreach(listener => listener(data));
         }
@@ -1922,8 +1922,12 @@
                         }
                         finally{
                             pos++;
-                            if( pos > length )  //reset the position to start after the last value is returned
+                            if( pos > length ) {  //reset the position to start after the last value is returned
                                 pos = 0;
+                                //incase the underlying data changes
+                                keys = Object.keys(object);
+                                length = keys.length;
+                            }
                         }
                     }
                 };

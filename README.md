@@ -104,9 +104,9 @@ Flow Methods
 Flow methods are data transformations that yield other Flows. Each Flow maintains a link to the Flow operation before it.
 Flow methods are lazily computed, nothing happens to the underlying data until an action is called.
 When an action is called on a Flow, data is continually streamed/piped down to the next Flow level for further processing as they are produced.
-This can reduce the execution time because some operations can be handled together. The currently supported methods are:
+This can reduce the execution time because some operations can be handled together. The currently supported methods are listed below:
 
-For most of the examples, we will be using the following extracted sample dataset nobel prize winners for physics in 2016. The complete dataset is available at: [http://api.nobelprize.org/v1/prize.json](http://api.nobelprize.org/v1/prize.json)
+For most of the examples, we will be using the following extracted sample dataset of nobel prize winners for physics in 2016. The complete dataset is available at: [http://api.nobelprize.org/v1/prize.json](http://api.nobelprize.org/v1/prize.json)
 
 ```javascript
 var winners = [
@@ -205,7 +205,7 @@ var whereFlow = Flow.from([1,2,3,4,5,6,7,8,9]).where(num => num % 2 == 0); //ret
 #### orderBy(function | Flow.ASC | Flow.DESC | Flow.NUM_ASC | Flow.NUM_DESC)
 This performs a sorting operation on the data based on a given function. Flow has internal operations to sort based on descending and ascending order.
 You can provide your own sorting implementation which will normally be submitted to Array.prototype.sort() function.
-*Flow.ASC* and *Flow.DESC* will sort sorted according to each character's Unicode code point value, according to the string conversion of each element with the only difference being that *Flow.ASC* will sort in ascending order and *Flow.DESC* in descending order.
+*Flow.ASC* and *Flow.DESC* will sort according to each character's Unicode code point value, according to the string conversion of each element with the only difference being that *Flow.ASC* will sort in ascending order and *Flow.DESC* in descending order.
 *Flow.NUM_ASC* and *Flow.NUM_DESC* with sort the elements as numbers.
 
 ```javascript
@@ -245,7 +245,7 @@ var chemistryWinners = [
 
 var iteratorFlow = Flow.from(winners);  //IteratorFlow is the first flow in the chain
 //merge both datasets and return the full names of all the winners
-var allWinners = iteratorFlow.merge(chemistryWinners).select((winner) => winner.firstname + " " + winner.surname).collect();
+var allWinners = iteratorFlow.merge(chemistryWinners).select(winner => winner.firstname + " " + winner.surname).collect();
 //returns ["David J. Thouless", "F. Duncan M. Haldane", "J. Michael Kosterlitz", "Jean-Pierre Sauvage", "Sir J. Fraser Stoddart", "Bernard L. Feringa"]
 ```
 
@@ -443,17 +443,59 @@ Flow.from("fs://./names.txt").range(0, 11).foreach(line => console.log(line));
 ```
 
 
-Advanced
---------
-#### Flow Groups
+Advanced + Design Info
+----------------------
+### Flow Groups
 There are 5 Flow groups namely: IteratorFlow, OutFlow, InFlow, DiscretizedFlow and Flow (the default Flow). They are grouped based on the type of operations that can be performed on them.
+
 i. IteratorFlow: This is mostly the first Flow in a Flow chain. When the Flow.from(…) method is called, an IteratorFlow is created. This flow extends the default Flow and provides a few more operations.
+
 ii. OutFlow: This Flow is responsible for processing and sending data across applications. More information on this later.
+
 iii. InFlow: This Flow is responsible for receiving data from another application. Also, more information on this later.
+
 iv. DiscretizedFlow: This Flow splits data streams into chunks/windows to allow for Flow methods that require finite data operations. Discretized Flows are discussed much later.
+
 v. Flow: This is the default Flow that has all the basic operations for data processing.
 
-#### IteratorFlow
+### Flow Chain Pipelining
+A Flow chain is a linked data structure of different Flow objects. Every Flow is aware of the previous Flow and the next Flow in the chain. A Flow chain is created when a Flow method is called on a Flow object.
+As an example:
+
+```javascript
+var flow = Flow.from(array).skip(2).where((num) => num % 2 == 0);
+```
+
+From the example above, there are three Flow objects in the Flow chain. When an action is called on the final flow object, data is piped through the Flow chain till it gets to the last Flow in the chain, from which the action is computed.
+
+### Flow Push & Pull Models
+Flow provides two modes of data pipelining: push and pull. The pull model is used to request that data be piped from the IteratorFlow (discussed later) through the chain. The data is generated from the Iterator when requested and sent through the chain. This mode is used by Flow actions to do a final computation on the dataset. For the push model, data is automatically piped through the Flow chain. The push model is used in Flow Streaming.
+
+### Flow Streaming
+For continuous streams of data, Flow provides a data push model that can continuously pipe data through the Flow chain. This can be especially useful if computed data needs to be sent to another application for further processing. Each Flow pushes processed data to the next Flow in the chain or to a customizable terminal function (If the Flow is the last in the chain). The terminal function for a Flow can be set using the setTerminalFunction method. Flow streaming can be achieved when the Flow is created from either a Streamer or a function that generates continuous data like a JS Generator. An example of working with Streamer is shown below:
+
+```javascript
+//import Flow and Streamer
+var Flow = RichFlow.Flow;
+var Streamer = RichFlow.Streamer;
+//create a new streamer
+var streamer = new Streamer();  
+
+//create a Flow from the streamer. Several streamers can be added via the merge method
+var flow = Flow.from(streamer).filter(num => num % 2 != 0);  //filter for odd numbers
+//set the terminal function which will receive the data from the last Flow in the chain
+flow.setTerminalFunction(console.log); //print to the console
+//Inform the IteratorFlow to start listening for data from the streamer
+flow.startPush(); //This can be called from any Flow in the chain.
+
+setInterval(() => {
+    streamer.send(parseInt(Math.random() * 10)); //send data to all listeners
+}, 500);
+```
+
+If the `startPush` method is called after the Streamer starts generating data, some data may be lost at the initial stage.
+
+### IteratorFlow
 The IteratorFlow is a Flow that creates a unified means of retrieving data from different data structures. The IteratorFlow turns the data passed to Flow.from(…) into a Javascript Iterable by wrapping the data with an iterator implementation that makes retrieving data as easy as calling a next() method on the iterator handle. More Iterators can be added via the merge method on an object of IteratorFlow. The merge method takes the same type of parameter as the Flow.from(…) method.
 
 This Flow is the Root Flow of the Flow chain and can be accessed from any Flow in the chain via the property rootFlow. As an example:
@@ -463,10 +505,10 @@ var flow = Flow.from(array).skip(2).where((num) => num % 2 == 0);
 var iteratorFlow = flow.rootFlow;	//get access to the IteratorFlow
 ```
 
-For data streaming in Flow, the IteratorFlow needs to listen for changes on the Streamer object(s) and retrieves new data when data is sent via the Streamer.\_send() method. The retrieved data is pushed through the Flow chain till it gets to an OutFlow or the terminal function of the last Flow object in the chain. To start data streaming in Flow, the startPush() method needs to be called on an object of the IteratorFlow. To stop the streaming at anytime, the stopPush() method can be called on the IteratorFlow object. When the stopPush() method is called, the IteratorFlow disconnects from the Streamers and stops listening for incoming data on the connected streams.
+For data streaming in Flow, the IteratorFlow needs to listen for changes on the Streamer object(s) and retrieves new data when data is sent via the Streamer.send() method. The retrieved data is pushed through the Flow chain till it gets to an OutFlow or the terminal function of the last Flow object in the chain. To start data streaming in Flow, the startPush() method needs to be called on an object of the IteratorFlow. To stop the streaming at anytime, the stopPush() method can be called on the IteratorFlow object. When the stopPush() method is called, the IteratorFlow disconnects from the Streamers and stops listening for incoming data on the connected streams.
 
 
-#### DiscretizerFlow & DiscretizedFlow
+### DiscretizerFlow & DiscretizedFlow
 DiscretizerFlow partitions streams of data flowing through the Flow chain into windows and each data window could be emitted as a DiscretizedFlow or an array. Actually, discretisation can also occur for static/finite datasets like arrays or generators. DiscretizedFlows are IteratorFlows and could themselves be discretised and Flow actions can be called on them. Any Flow can be discretised (with an exception to OutFlow). However, the discretization implementation in IteratorFlow differs from the implementation on others Flow.
 
 IteratorFlow handles the discretisation process internally, while the DiscretizerFlow handles discretisation for all other Flows. For IteratorFlow discretisation, the data window can be created from a single iterator or multiple iterators (this could be a single datastream or multiple datastream) while the discretisation for other Flow groups are done on the input data. The discretize method takes three arguments namely - the window span, the span length and a boolean value indicating if data should be spawned as discretised flows or as arrays. The third argument is optional and defaults to true.
@@ -476,18 +518,82 @@ For IteratorFlow discretization, the window span talks about how many iterators 
 For other Flow groups, discretisation is on the input. It is the responsibility of the programmer to ensure that the data received as input to the DiscretizerFlow is fit for discretisation and it is assumed that each data piped can be broken down is the way needed by the programmer. When DiscretizerFlow determines that it is not possible to discretize ‘perfectly’, the implementation respects the programmers wish and fills the remaining slots  in the data block with null values. The discretize method take in the same arguments and the span length follows the same as that of IteratorFlow. The window span here talks about how many parts each input piped to the DiscretizerFlow can be broken down. It is assumed that when each input is passed to Flow.from(…), it should be able to create an Iterator that will generate the amount of data required by the programmer.
 
 ```javascript
-//TODO
+//lazily create 4 streamers
+var streamers = Flow.of(4).map(a => new Streamer()).collect();
+//we need to merge all the streams so we start by adding one
+var flow = Flow.from(streamers[0]);
+for( i = 1; i < streamers.length; i++ )
+    flow = flow.merge(streamers[i]);  //merge the remainder
+//discretize with a span covering all streams and data length of 1
+var discretizerFlow = flow.discretize(streamers.length, 1);
+//set the terminal function
+discretizerFlow.setTerminalFunction(discretizedFlow => console.log(discretizedFlow.selectFlatten().collect()));
+discretizerFlow.startPush();  //start listening for data on the Streamers
+
+setInterval(() => {
+    streamers.forEach(streamer => streamer.send(parseInt(Math.random() * 10)));
+}, 500);
 ```
+
+### InFlow
+*example coming soon*
+
+### OutFlow
+*example coming soon*
+
+### Flow Caching
+
+This is an internal process that aims to speed up Flow reuse and works with static/finite data sets (does not work with Flow streaming). Flow attempts to get data from the Iterators each time an action is called on the Flow. However, for static/finite datasets, the iterators will produce same data each time leading to a time wastage when piping through the Flow chain each time. By caching processed data, when ever an action is called on a Flow (a second time), because it has already processed the data during the first round, it serves the processed data, saving processing time. Caching IteratorFlow data is trivial so they are never cached. However, this caching is on memory. Currently, the cache stays on for as long as the Flow has not be garbage collected.
 
 
 Common Pitfalls
 ---------------
-By default, Flow caches outputs for faster reuse. However, this can cause certain issues. As an example:
+By default, Flow caches outputs for faster reuse. However, this can cause certain issues if the underlying data source changes. With caching, the changes will not be reflected when the constructed Flow is being reused. Let us see a simple example with Arrays:
 
+```javascript
+//with caching
+var arr = [1,2,3,4,5,6,7,8,9];
+var flow = Flow.from(arr).where(num => num % 2 == 0);
+console.log(flow.count());  //prints 4
+arr.push(0);
+console.log(flow.count());  //prints 4
 
-To disable caching, after creating the Flow
+//without caching
+var arr = [1,2,3,4,5,6,7,8,9];
+var flow = Flow.from(arr).where(num => num % 2 == 0);
+flow.rootFlow.shouldCache = false;
+console.log(flow.count());  //prints 4
+arr.push(0);
+console.log(flow.count());  //prints 5
+```
 
+To disable caching, after creating the Flow, on the IteratorFlow do the following:
+
+```javascript
+var iteratorFlow = Flow.from(…);
+iteratorFlow.shouldCache = false; //needs to be done before any action is called
+```
+
+Another common pitfall you may have is in reusing Flows. Each Iterator in the IteratorFlow maintains a cursor on where the next data should be obtained from. Now, because the pipeline process ensures that the minimum amount of work is done to produce the desired result, it will sometimes be the case that an iterator may not get to the end and thus reusing will resume the cursor of the iterator from the last placed it stopped and will yield unexpected results. Do not reuse Flows if you do not understand this concept. As an example:
+
+```javascript
+var flow = Flow.fromRange(1, 10); //creates a Flow with numbers from 1 to 10
+console.log(flow.limit(5).collect()); //prints [1,2,3,4,5]
+flow.forEach(console.log);  //prints 7 8 9 10
+```
+
+From the above code, you can notice that the call to forEach prints what is left as opposed to all the content from 1 to 10. This type of error can be fixed in most cases by flushing the contents of the flow before reusing. Sometimes, it can only be fixed with a combination of turning off caching and flushing and other times it may take more than that. **Flow reuse should be done with caution**. To fix the above error, we can do the following:
+
+```javascript
+var flow = Flow.fromRange(1, 10); //creates a Flow with numbers from 1 to 10
+console.log(flow.limit(5).collect()); //prints [1,2,3,4,5]
+//flush the remaining contents. The iterators automatically reset for reuse when they get to the end
+flow.count();
+flow.forEach(console.log);  //prints 1 2 3 4 5 6 7 8 9 10
+```
 
 Roadmap
 -------
-i. ParallelFlow: A truly parallel pipeline data processing library
+i. ParallelFlow: A truly parallel pipeline data processing library.
+
+ii. Flow Caching Offloading: An investigation needs to be made on when and which Flows to release memory, especially when the system is running low on RAM storage. There could be a listener that listens out for memory changes and probably informs Flows to either save processed data to disk or release the data. Based on the size of data held by the Flows in the middle of the chain, the runtime could decide which will be faster, saving to the disk and reloading from disk when needed or recomputing from the previous Flow in the chain.
