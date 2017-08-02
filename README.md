@@ -135,7 +135,7 @@ var winners = [
 ];
 ```
 
-#### select(function | string) \[alias: map\]
+#### select(function | String) \[alias: map\]
 This is similar to map in mad-reduce operations. This selects one or more parts of a data from a given dataset. As an example
 
 ```javascript
@@ -299,7 +299,7 @@ var any = Flow.from([1,2,3,4,5,6,7,8,9]).where(num => num % 2 == 0).findAny();
 //returns 2
 ```
 
-#### groupBy(function | string)
+#### groupBy(function | String)
 This returns the data as a JS object partitioned into array of groups, determined by the function.
 The argument can either be a function (that receives an item each time to generate the group that items belongs to) or a key (from which the group will be determined using JS object syntax like input\[key\]).
 
@@ -352,6 +352,14 @@ var map = Flow.from(array).collect(Flow.toMap("entity"));
         "student" => (2) [{entity: "student", studentID: 23434}, {entity: "student", studentID: 12233}]
     }
 */
+```
+
+#### join([delimiter: String])
+This function joins the outputs by a delimiter which is optional. The delimiter argument defaults to ",".
+
+```javascript
+var joined = Flow.from([1,2,3,4,5]).map(num => num * 5).limit(3).join(" | ");
+//returns 5 | 10 | 15
 ```
 
 #### forEach(function) \[alias: foreach\]
