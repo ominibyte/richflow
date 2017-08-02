@@ -67,7 +67,7 @@ A Flow can be created from several Javascript data structures including: Array, 
 
 Here is an example of how a Flow can be created from a simple array:
 
-```
+```javascript
 var array = [1, 0, 5, 13, -1];
 var flow = Flow.from(array);
 ```
@@ -75,25 +75,25 @@ var flow = Flow.from(array);
 The above example creates an Iterator from the array from which data is pipelined.
 Flow can also be created from a number range using:
 
-```
+```javascript
 var flow = Flow.fromRange(3, 8);	//creates a Flow with [3,4,5,6,7,8]
 ```
 
 Flow can also be created from several arguments using:
 
-```
+```javascript
 var flow = Flow.of(1, 3, 4, 7);	//creates a Flow with [1,3,4,7]
 ```
 
 The Flow.of(…) also allows creating Flow with empty array elements which could be operated on later. Flow.of(…) default to Flow.from(…) when the argument to the method is not a number and is a single argument. An example is shown below:
 
-```
+```javascript
 var flow = Flow.of(3);		//creates a Flow with [[],[],[]]
 ```
 
 Let us show a very simple use case for Flow.of(…) that is actually used within the Flow implementation:
 
-```
+```javascript
 //A lazy way to create 5 queues.
 var flow = Flow.of(5).map(array => new Queue());
 ```
@@ -108,7 +108,7 @@ This can reduce the execution time because some operations can be handled togeth
 
 For most of the examples, we will be using the following extracted sample dataset nobel prize winners for physics in 2016. The complete dataset is available at: [http://api.nobelprize.org/v1/prize.json](http://api.nobelprize.org/v1/prize.json)
 
-```
+```javascript
 var winners = [
     {
       "id": "928",
@@ -437,7 +437,7 @@ Flow does not current work with the browser FileReader due to the way the FileRe
 For working with files in node, The Flow.from() method accepts a string path to the file. However, the path needs to be prepended with "fs://". This is used to distinguish working with files from strings.
 Files are processed by line. As an example:
 
-```
+```javascript
 //we have a file called names.txt in the same directory
 Flow.from("fs://./names.txt").range(0, 11).foreach(line => console.log(line));
 ```
@@ -458,12 +458,12 @@ The IteratorFlow is a Flow that creates a unified means of retrieving data from 
 
 This Flow is the Root Flow of the Flow chain and can be accessed from any Flow in the chain via the property rootFlow. As an example:
 
-```
+```javascript
 var flow = Flow.from(array).skip(2).where((num) => num % 2 == 0);
 var iteratorFlow = flow.rootFlow;	//get access to the IteratorFlow
 ```
 
-For data streaming in Flow, the IteratorFlow needs to listen for changes on the Streamer object(s) and retrieves new data when data is sent via the Streamer._send() method. The retrieved data is pushed through the Flow chain till it gets to an OutFlow or the terminal function of the last Flow object in the chain. To start data streaming in Flow, the startPush() method needs to be called on an object of the IteratorFlow. To stop the streaming at anytime, the stopPush() method can be called on the IteratorFlow object. When the stopPush() method is called, the IteratorFlow disconnects from the Streamers and stops listening for incoming data on the connected streams.
+For data streaming in Flow, the IteratorFlow needs to listen for changes on the Streamer object(s) and retrieves new data when data is sent via the Streamer.\_send() method. The retrieved data is pushed through the Flow chain till it gets to an OutFlow or the terminal function of the last Flow object in the chain. To start data streaming in Flow, the startPush() method needs to be called on an object of the IteratorFlow. To stop the streaming at anytime, the stopPush() method can be called on the IteratorFlow object. When the stopPush() method is called, the IteratorFlow disconnects from the Streamers and stops listening for incoming data on the connected streams.
 
 
 #### DiscretizerFlow & DiscretizedFlow
@@ -475,7 +475,7 @@ For IteratorFlow discretization, the window span talks about how many iterators 
 
 For other Flow groups, discretisation is on the input. It is the responsibility of the programmer to ensure that the data received as input to the DiscretizerFlow is fit for discretisation and it is assumed that each data piped can be broken down is the way needed by the programmer. When DiscretizerFlow determines that it is not possible to discretize ‘perfectly’, the implementation respects the programmers wish and fills the remaining slots  in the data block with null values. The discretize method take in the same arguments and the span length follows the same as that of IteratorFlow. The window span here talks about how many parts each input piped to the DiscretizerFlow can be broken down. It is assumed that when each input is passed to Flow.from(…), it should be able to create an Iterator that will generate the amount of data required by the programmer.
 
-```
+```javascript
 //TODO
 ```
 
