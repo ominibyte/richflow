@@ -334,6 +334,21 @@
             return flow;
         }
 
+        partitionBy(keyFunc){
+            var groupFunc = keyFunc;
+            if( !Util.isFunction(keyFunc) ) {
+                groupFunc = function (input) {
+                    return input[keyFunc];
+                };
+            }
+
+            var flow = new PartitionByMethodFlow(groupFunc);
+
+            setRefs(this, flow);
+
+            return flow;
+        }
+
 
         /**
          * This method discretizes a Flow
@@ -1392,7 +1407,7 @@
 
 
     /**
-     *
+     * The orderBy method class Flow definition
      */
     class OrderByMethodFlow extends Flow{
         constructor(func){
@@ -1451,6 +1466,75 @@
         }
 
         //we cannot sort in a push
+        push(input){
+            this.next !== null ? this.next.push(input) : this.terminalFunc(input);
+        }
+    }
+
+
+    /**
+     * The partitionBy method class Flow definition
+     */
+    class PartitionByMethodFlow extends Flow{
+        constructor(func){
+            super();
+            this.pipeFunc = func;
+            this.partitions = {};
+            this.obtainedAll = false;
+            this.iterator = null;   //used for iterating through the partitions
+        }
+
+        process(){
+            if( this.ended )
+                return this._getElement();
+
+            //establish link from parent to this Flow
+            if( this.prev.next != this )//if the parent was linked to another Flow, bring back the link
+                this.prev.next = this;
+
+            var obj;
+
+            if( !this.obtainedAll ){
+                obj = this.prev.process();
+                if (obj != null)
+                    return obj;
+
+                this.obtainedAll = true;
+
+                this.iterator = FlowFactory.createIteratorFromObject(this.partitions);
+            }
+
+            obj = this.iterator.next();
+            if( obj.done ){
+                this._addElement(null);
+
+                //reset for reusing
+                this.iterator = null;
+                this.obtainedAll = false;
+                return null;
+            }
+
+            obj = obj.value;
+
+            this._addElement(obj);
+
+            if( this.next !== null )
+                return this.next.pipe(obj);
+            return obj;
+        }
+
+        pipe(input){
+            var partition = this.pipeFunc(input);
+            if( !this.partitions[partition] )
+                this.partitions[partition] = [];
+            this.partitions[partition].push(input);
+
+            return this.process();
+        }
+
+        //one of two options for push: we either simply let the data pass through or
+        //we apply the group functions and send the data on as an object with {group: name, data: input}
+        //going with the first till i hear/feel otherwise.
         push(input){
             this.next !== null ? this.next.push(input) : this.terminalFunc(input);
         }

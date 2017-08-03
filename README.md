@@ -214,6 +214,33 @@ You can provide your own sorting implementation which will normally be submitted
 var orderedFlow = Flow.from(winners).select("surname").orderBy(Flow.ASC);   //returns a Flow object
 ```
 
+#### partitionBy(function | String)
+This performs data grouping on the elements of the data, determined by the function. This is similar to the Flow action - groupBy, but this returns a Flow for further pipelining.
+The argument can either be a function (that receives an item each time to generate the group/partition that items belongs to) or a key (from which the group/partition will be determined using JS object syntax like input\[key\]).
+After partitioning, data is emitted one partition at a time in the format: 
+`{key: "partition key", value:[...array of elements in that partition]}`
+
+As an example:
+
+```javascript
+var array = [
+    {entity: "book", bookID: 12},
+    {entity: "student", studentID: 23434},
+    {entity: "student", studentID: 12233},
+    {entity: "book", bookID: 998}
+];
+
+//we want to partition by entity so all entries with same entity value would be grouped together
+let partitions = Flow.from(array).partitionBy("entity").collect();
+//partitions will contain:
+/*
+[
+	{key: "book", value: [{entity: "book", bookID: 12}, {entity: "book", bookID: 998}]},
+	{key: "student", value: [{entity: "student", studentID: 23434}, {entity: "student", studentID: 12233}]}
+]
+*/
+```
+
 #### merge(data)
 This method is only available to an object of IteratorFlow and is used to merge a supported data structure as with Flow.from(data). Merging creates an Iterator and adds it to the current Iterator or Iterators.
 This function also returns an IteratorFlow so one can do multiple merging on the return value.
