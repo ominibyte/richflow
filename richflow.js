@@ -1766,7 +1766,7 @@
                         var seenNull = false, item;
                         for (let i = 0; i < this.span; i++) {
                             if (seenNull)
-                                toAdd.add(null);
+                                toAdd.push(null);
                             else {
                                 item = iteratorFlow.process();
                                 toAdd.push(item);
@@ -1831,7 +1831,7 @@
                         var seenNull = false, item;
                         for (let i = 0; i < this.span; i++) {
                             if (seenNull)
-                                toAdd.add(null);
+                                toAdd.push(null);
                             else {
                                 item = iteratorFlow.process();
                                 toAdd.push(item);
