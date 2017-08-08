@@ -138,6 +138,14 @@
             return FlowFactory.getFlow([...new Array(end - start + 1).keys()].map((elem) => elem + start));
         }
 
+        /**
+         * This is a direct method to create a Flow from file.
+         * @param file the path to the file
+         */
+        static fromFile(file){
+            return new IteratorFlow(FlowFactory.createIteratorFromFileSystem(file));
+        }
+
 
         //Dummy function to be used by collect
         static toArray(){
@@ -183,7 +191,6 @@
                 throw new Error("Limit value must be greater than 0");
 
             var flow = new RangeMethodFlow(0, num);
-
             setRefs(this, flow);
 
             return flow;
@@ -198,11 +205,68 @@
                 throw new Error("Skip value must be greater than 0");
 
             var flow = new RangeMethodFlow(num, Number.MAX_VALUE);
-
             setRefs(this, flow);
 
             return flow;
         }
+
+        /**
+         * Skip until the condition in the function argument returns true
+         * @param func the function which will test the input and return a boolean
+         */
+        skipUntil(func){
+            if( !Util.isFunction(func) )
+                throw new Error("skipUntil requires a function");
+
+            var flow = new SkipTakeWhileUntilFlow(func, 1);
+            setRefs(this, flow);
+
+            return flow;
+        }
+
+        /**
+         * Skip while the condition in the function argument returns true
+         * @param func the function which will test the input and return a boolean
+         */
+        skipWhile(func){
+            if( !Util.isFunction(func) )
+                throw new Error("skipWhile requires a function");
+
+            var flow = new SkipTakeWhileUntilFlow(func, 2);
+            setRefs(this, flow);
+
+            return flow;
+        }
+
+        /**
+         * Keep accepting the piped data until the condition in the function argument returns true
+         * This method also takes the data that meets the condition but skips after
+         * @param func the function which will test the input and return a boolean
+         */
+        takeUntil(func){
+            if( !Util.isFunction(func) )
+                throw new Error("takeUntil requires a function");
+
+            var flow = new SkipTakeWhileUntilFlow(func, 3);
+            setRefs(this, flow);
+
+            return flow;
+        }
+
+        /**
+         * Keep accepting the piped data while the condition in the function argument returns true
+         * @param func the function which will test the input and return a boolean
+         */
+        takeWhile(func){
+            if( !Util.isFunction(func) )
+                throw new Error("takeWhile requires a function");
+
+            var flow = new SkipTakeWhileUntilFlow(func, 4);
+            setRefs(this, flow);
+
+            return flow;
+        }
+
 
         /**
          * This create a data window to operate on
@@ -218,7 +282,6 @@
                 throw new Error("End Index cannot be less than Start Index");
 
             var flow = new RangeMethodFlow(startIndex, endIndex);
-
             setRefs(this, flow);
 
             return flow;
@@ -258,7 +321,6 @@
          */
         selectExpand(func){
             var flow = new SelectExpandFlattenMethodFlow(func);
-
             setRefs(this, flow);
 
             return flow;
@@ -279,7 +341,6 @@
          */
         where(func){
             var flow = new WhereMethodFlow(func);
-
             setRefs(this, flow);
 
             return flow;
@@ -328,7 +389,6 @@
                 func = Flow._sort(func.toLowerCase());
 
             var flow = new OrderByMethodFlow(func);
-
             setRefs(this, flow);
 
             return flow;
@@ -343,7 +403,6 @@
             }
 
             var flow = new PartitionByMethodFlow(groupFunc);
-
             setRefs(this, flow);
 
             return flow;
@@ -361,7 +420,6 @@
                 spawnFlows = true;
 
             var flow = new DiscretizerFlow(span, getDataEndObject(length), spawnFlows);
-
             setRefs(this, flow);
 
             this.isDiscretized = true;
@@ -1353,6 +1411,9 @@
                     return input;
             }
             else {
+                //reset the position for reuse
+                this.position = 0;
+
                 this._addElement(null);
                 return null;
             }
@@ -1362,7 +1423,7 @@
             if( this.position < this.end ){
                 this.position++;
 
-                if( this.position <= this.start ) {
+                if( this.position <= this.start || this.position >= this.end ) {
                     return;
                 }
 
@@ -1370,6 +1431,10 @@
             }
         }
     }
+
+
+
+
 
     /**
      * The where method (filter) class Flow definition
@@ -1537,6 +1602,123 @@
         //going with the first till i hear/feel otherwise.
         push(input){
             this.next !== null ? this.next.push(input) : this.terminalFunc(input);
+        }
+    }
+
+    /**
+     * This class is responsible for the following methods:
+     * skipUntil, skipWhile, takeUntil, takeWhile
+     */
+    class SkipTakeWhileUntilFlow extends Flow{
+        constructor(func, method){
+            super();
+            this.pipeFunc = func;
+            this.method = method;   //1=skipUntil, 2=skipWhile, 3=takeUntil, 4=takeWhile
+            this.finished = false;
+        }
+
+        pipe(input){
+            var obj;
+
+            switch(this.method){
+                case 1: //skipUntil
+                    if( this.finished || this.pipeFunc(input) ) {//condition has been met for skipUntil...we no longer skip
+                        this.finished = true;   //flag that we do not need to check the pipe function test
+                        obj = input;
+                    }
+                    else {
+                        obj = this.prev.process();
+                        if (obj == null)
+                            this._addElement(obj);
+                        return obj;
+                    }
+                    break;
+                case 2: //skipWhile
+                    if( !this.finished && this.pipeFunc(input) ){
+                        obj = this.prev.process();
+                        if (obj == null)
+                            this._addElement(obj);
+                        return obj;
+                    }
+                    else{
+                        this.finished = true;   //flag that we do not need to check the pipe function test
+                        obj = input;
+                    }
+                    break;
+                case 3: //takeUntil
+                    if( this.finished || this.pipeFunc(input) ){
+                        if( !this.finished )    //also take the one that meets the condition
+                            obj = input;
+                        else
+                            obj = null;
+                        this.finished = true;
+                    }
+                    else
+                        obj = input;
+                    break;
+                case 4: //takeWhile
+                    if( !this.finished && this.pipeFunc(input) )
+                        obj = input;
+                    else{
+                        this.finished = true;
+                        obj = null;
+                    }
+            }
+
+            this._addElement(obj);
+
+            if (obj == null) {
+                this.finished = false;  //reset for reuse
+                return null;
+            }
+
+            if( this.next !== null )
+                return this.next.pipe(obj);
+            return obj;
+        }
+
+        push(input){
+            var obj;
+
+            switch(this.method){
+                case 1: //skipUntil
+                    if( this.finished || this.pipeFunc(input) ) {//condition has been met for skipUntil...we no longer skip
+                        this.finished = true;   //flag that we do not need to check the pipe function test
+                        obj = input;
+                    }
+                    else
+                        return;
+                    break;
+                case 2: //skipWhile
+                    if( !this.finished && this.pipeFunc(input) )
+                        return;
+                    else{
+                        this.finished = true;   //flag that we do not need to check the pipe function test
+                        obj = input;
+                    }
+                    break;
+                case 3: //takeUntil
+                    if( this.finished || this.pipeFunc(input) ){
+                        if( !this.finished ) {    //also take the one that meets the condition
+                            obj = input;
+                            this.finished = true;
+                        }
+                        else
+                            return;
+                    }
+                    else
+                        obj = input;
+                    break;
+                case 4: //takeWhile
+                    if( !this.finished && this.pipeFunc(input) )
+                        obj = input;
+                    else{
+                        this.finished = true;
+                        return;
+                    }
+            }
+
+            this.next !== null ? this.next.push(obj) : this.terminalFunc(obj);
         }
     }
 
@@ -2048,7 +2230,8 @@
          */
         static createIteratorFromFileSystem(path){
             return (function(){
-                path = path.substring("fs://".length);
+                if( path.trim().substring(0, "fs://".length) == "fs://" )
+                    path = path.trim().substring("fs://".length);
 
                 let lineByLine = require('n-readlines');
                 let liner = new lineByLine(path);
